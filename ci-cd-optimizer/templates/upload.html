@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Pipeline Log - CI/CD Optimizer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="container upload-container">
+        <header>
+            <h1>📂 Upload Pipeline Log</h1>
+            <p>Upload your JSON pipeline log file to analyze logging duration and get optimization tips.</p>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for message in messages %}
+            <div class="alert">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <form method="post" enctype="multipart/form-data" class="upload-form">
+            <div class="form-group">
+                <input type="file" name="file" accept=".json" required id="file-input">
+                <label for="file-input" class="file-label">Choose JSON File</label>
+            </div>
+            <button type="submit" class="btn btn-primary">Analyze Log 🚀</button>
+        </form>
+
+        <div class="back-link">
+            <a href="{{ url_for('index') }}">Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+
+</html>

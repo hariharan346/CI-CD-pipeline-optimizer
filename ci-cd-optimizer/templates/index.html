@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Intelligence Platform v4</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .card {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .efficiency-gauge {
+            height: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        .efficiency-bar {
+            height: 100%;
+            transition: width 1s ease-in-out;
+        }
+
+        .code-block {
+            background: #2d3436;
+            color: #dfe6e9;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+            position: relative;
+        }
+
+        .badge-priority-HIGH {
+            background-color: #e17055;
+            color: white;
+        }
+
+        .badge-priority-CRITICAL {
+            background-color: #d63031;
+            color: white;
+        }
+
+        .badge-priority-MEDIUM {
+            background-color: #fdcb6e;
+            color: black;
+        }
+
+        .status-REGRESSION {
+            background-color: #fab1a0;
+            color: #d63031;
+            font-weight: bold;
+        }
+
+        .status-HEALTHY {
+            background-color: #dfe6e9;
+            color: #2d3436;
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-rocket me-2"></i>CI/CD Intelligence Platform</a>
+            <div class="d-flex">
+                <form action="{{ url_for('fetch_jenkins') }}" method="post" class="d-flex">
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="fas fa-sync me-2"></i>Analyze
+                        Live Pipeline</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show"
+            role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if metrics %}
+
+        <!-- SECTION 1: KPI OVERVIEW -->
+        <div class="row g-4 mb-4">
+            <!-- Efficiency Score -->
+            <div class="col-md-3">
+                <div class="card h-100 border-start border-5 border-primary">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted text-uppercase mb-2">Efficiency Score</h6>
+                        <h1 class="display-4 fw-bold text-primary">{{ metrics.efficiency.total_score }}</h1>
+                        <div class="efficiency-gauge mt-2">
+                            <div class="efficiency-bar bg-primary" style="width: {{ metrics.efficiency.total_score }}%">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Duration -->
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted text-uppercase mb-2">Total Duration</h6>
+                        <h1 class="display-4 fw-bold">{{ metrics.total_duration }}s</h1>
+                        {% if metrics.regression and metrics.regression.is_regression %}
+                        <span class="badge bg-danger"><i class="fas fa-arrow-up"></i> {{
+                            metrics.regression.increase_percent }}% Regression</span>
+                        {% else %}
+                        <span class="badge bg-success">Stable Baseline</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Failure Risk -->
+            <div class="col-md-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <h6 class="text-muted text-uppercase mb-2">Failure Risk</h6>
+                        {% if metrics.risk.risk_level == 'CRITICAL' %}
+                        <h1 class="display-4 fw-bold text-danger">CRITICAL</h1>
+                        {% elif metrics.risk.risk_level == 'HIGH' %}
+                        <h1 class="display-4 fw-bold text-warning">HIGH</h1>
+                        {% else %}
+                        <h1 class="display-4 fw-bold text-success">LOW</h1>
+                        {% endif %}
+                        <small class="text-muted">{{ metrics.risk.probability }}% Probability</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Build Status -->
+            <div class="col-md-3">
+                <div
+                    class="card h-100 {{ 'bg-danger text-white' if metrics.status != 'SUCCESS' else 'bg-success text-white' }}">
+                    <div class="card-body text-center d-flex flex-column justify-content-center">
+                        <h6 class="text-uppercase mb-1 opacity-75">Build Status</h6>
+                        <h2 class="fw-bold mb-0">{{ metrics.status }}</h2>
+                        <small>Build #{{ metrics.build_number }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- LEFT COLUMN: INSIGHTS & ACTIONS -->
+            <div class="col-lg-8">
+
+                <!-- SECTION 4: OPTIMIZATION ACTIONS -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold"><i class="fas fa-magic text-warning me-2"></i>Optimization & Recovery
+                            Plan</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if suggestions %}
+                        {% for item in suggestions %}
+                        <div class="card mb-3 border">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title fw-bold text-dark">{{ item.title }}</h5>
+                                    <span class="badge badge-priority-{{ item.severity }}">{{ item.severity }}</span>
+                                </div>
+                                <p class="card-text text-muted">{{ item.description }}</p>
+
+                                <div class="row g-2 mb-3">
+                                    <div class="col-auto"><span class="badge bg-light text-dark border">Confidence: {{
+                                            item.confidence }}</span></div>
+                                    <div class="col-auto"><span class="badge bg-light text-dark border">Impact: {{
+                                            item.impact }}</span></div>
+                                </div>
+
+                                {% if item.snippet %}
+                                <div class="code-block">
+                                    {{ item.snippet }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                            <p>System is optimized. No actionable insights detected.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- SECTION 2: STAGE BREAKDOWN -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold"><i class="fas fa-layer-group text-primary me-2"></i>Stage Intelligence
+                            Analysis</h5>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Stage Name</th>
+                                    <th>Duration</th>
+                                    <th>Baseline (Avg)</th>
+                                    <th>Regression</th>
+                                    <th>Impact</th>
+                                    <th>Health</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stage in metrics.stage_analysis %}
+                                <tr class="{{ 'table-danger' if stage.status == 'REGRESSION' else '' }}">
+                                    <td class="fw-bold">{{ stage.name }}</td>
+                                    <td>{{ stage.duration }}s</td>
+                                    <td class="text-muted">{{ stage.baseline }}s</td>
+                                    <td>
+                                        {% if stage.regression_pct > 0 %}
+                                        <span class="text-danger fw-bold">+{{ stage.regression_pct }}%</span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="progress" style="height: 6px; width: 80px;">
+                                            <div class="progress-bar bg-info" style="width: {{ stage.impact_pct }}%">
+                                            </div>
+                                        </div>
+                                        <small>{{ stage.impact_pct }}%</small>
+                                    </td>
+                                    <td>
+                                        {% if stage.status == 'REGRESSION' %}
+                                        <span class="badge bg-danger">REGRESSION</span>
+                                        {% else %}
+                                        <span class="badge bg-success">HEALTHY</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN: STATS & TRENDS -->
+            <div class="col-lg-4">
+
+                <!-- SECTION 3: ROOT CAUSE PANEL -->
+                {% if metrics.issues %}
+                <div class="card mb-4 border-danger">
+                    <div class="card-header bg-danger text-white py-3">
+                        <h5 class="mb-0 fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>Detected Root Causes
+                        </h5>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        {% for issue in metrics.issues %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="fw-bold text-danger">{{ issue.cause }}</h6>
+                                <span class="badge bg-danger rounded-pill">{{ (issue.confidence * 100) | int }}%</span>
+                            </div>
+                            <p class="mb-1 small text-muted">{{ issue.suggestion }}</p>
+                            <small class="text-uppercase fw-bold text-xs text-muted">{{ issue.type }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- SECTION 5: EFFICIENCY BREAKDOWN -->
+                <div class="card mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold">Score Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Speed</span>
+                                <span class="fw-bold">{{ metrics.efficiency.breakdown.speed }}</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-success"
+                                    style="width: {{ metrics.efficiency.breakdown.speed }}%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Reliability</span>
+                                <span class="fw-bold">{{ metrics.efficiency.breakdown.reliability }}</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-primary"
+                                    style="width: {{ metrics.efficiency.breakdown.reliability }}%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Stability</span>
+                                <span class="fw-bold">{{ metrics.efficiency.breakdown.stability }}</span>
+                            </div>
+                            <div class="progress" style="height: 8px;">
+                                <div class="progress-bar bg-warning"
+                                    style="width: {{ metrics.efficiency.breakdown.stability }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 6: TREND CHART -->
+                {% if history %}
+                <div class="card mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0 fw-bold">Performance Trend</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="trendChart" height="200"></canvas>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+        {% else %}
+        <div class="text-center py-5">
+            <div class="display-1 text-muted mb-4"><i class="fas fa-server"></i></div>
+            <h2 class="fw-bold">Ready to Analyze</h2>
+            <p class="lead text-muted">Connect to your Jenkins pipeline to start the Intelligence Engine.</p>
+        </div>
+        {% endif %}
+
+    </div>
+
+    <!-- Bootsrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    {% if history %}
+    <script>
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ history.labels | tojson }},
+            datasets: [{
+                label: 'Duration (s)',
+                data: {{ history.durations | tojson }},
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            tension: 0.4,
+            fill: true
+            }]
+        },
+            options: {
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, grid: { display: false } }, x: { grid: { display: false } } }
+        }
+    });
+    </script>
+    {% endif %}
+
+</body>
+
+</html>
